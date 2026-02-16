@@ -1,6 +1,5 @@
 import os
 import streamlit as st
-import time
 
 from dotenv import load_dotenv
 from langchain_google_genai import ChatGoogleGenerativeAI
@@ -24,7 +23,7 @@ for i in range(3):
         urls.append(url)
 
 process_url_clicked = st.sidebar.button("Process URLs")
-file_path = "faiss_store_gemini"
+file_path = "faiss_store_hf"
 
 main_placeholder = st.empty()
 
@@ -54,7 +53,11 @@ if process_url_clicked and urls:
 
     main_placeholder.text("Processing Complete ✅")
 
-query = st.text_input("Ask a Question:")
+# Initialize chat history in session
+if "chat_history" not in st.session_state:
+    st.session_state.chat_history = []
+
+query = st.chat_input("Ask your question...")
 
 if query and os.path.exists(file_path):
     embeddings = HuggingFaceEmbeddings(
@@ -67,41 +70,51 @@ if query and os.path.exists(file_path):
         allow_dangerous_deserialization=True
     )
 
-    retriever = vectorstore.as_retriever(
-        search_kwargs={"k": 5}  # Retrieve top 5 most relevant documents
-    )
+    retriever = vectorstore.as_retriever(search_kwargs={"k": 5})
 
-    # Prompt Template
+    # Retrieve relevant docs
+    docs = retriever.invoke(query)
+    context = "\n\n".join([doc.page_content for doc in docs])
+
+    # Build conversation history text
+    history_text = ""
+    for chat in st.session_state.chat_history:
+        history_text += f"{chat['role']}: {chat['content']}\n"
+
     prompt = ChatPromptTemplate.from_template(
         """
-        Answer the question based on the context provided below.
-        Use the context to provide a comprehensive and accurate answer.
-        If the context contains relevant information, use it to answer the question.
-        If the context doesn't contain enough information to fully answer the question, 
-        provide the best answer you can based on the available context and indicate what information might be missing.
+        You are a helpful news research assistant.
+
+        Conversation History:
+        {history}
 
         Context:
         {context}
 
-        Question:
+        User Question:
         {question}
 
-        Answer:
+        Answer clearly and concisely.
         """
     )
 
-    # Modern LCEL Chain
-    chain = (
-        {
-            "context": retriever,
-            "question": RunnablePassthrough()
-        }
-        | prompt
-        | llm
-        | StrOutputParser()
-    )
+    chain = prompt | llm | StrOutputParser()
 
-    response = chain.invoke(query)
+    response = chain.invoke({
+        "history": history_text,
+        "context": context,
+        "question": query
+    })
 
-    st.header("Answer")
-    st.write(response)
+    # Store conversation
+    st.session_state.chat_history.append({"role": "User", "content": query})
+    st.session_state.chat_history.append({"role": "Assistant", "content": response})
+
+    # Display conversation
+for chat in st.session_state.chat_history:
+    if chat["role"] == "User":
+        with st.chat_message("user"):
+            st.write(chat["content"])
+    else:
+        with st.chat_message("assistant"):
+            st.write(chat["content"])
