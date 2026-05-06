@@ -223,13 +223,11 @@ rag-news-research-assistant/
 
 ## 🖼️ Screenshots
 
-> **Add screenshots here to showcase your app.**
 
 | URL Ingestion | Chat Interface |
 |---|---|
 | `[Screenshot: Sidebar with URL inputs and Process button]` | `[Screenshot: Chat UI with a sample question and answer]` |
 
-*To add screenshots: place images in a `/screenshots` folder and update the paths above.*
 
 ---
 
